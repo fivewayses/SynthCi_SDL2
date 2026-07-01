@@ -1,0 +1,12 @@
+build
+__MACOSX
+
+.vscode
+.idea
+.vim
+
+*.exe
+*.dylib
+*.lib
+*.so
+*.o
