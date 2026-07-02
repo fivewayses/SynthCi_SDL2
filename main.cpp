@@ -15,7 +15,8 @@
 
 static Synthesizer synth;
 
-int Test() {
+int Test()
+{
 	const uint32_t size = 1024;
 	const char *test = reinterpret_cast<char *>(synth.TestAudio(size));
 	
@@ -27,7 +28,8 @@ int Test() {
 	return 0;
 }
 
-int main(int argc, char **argv) {
+int main(int argc, char **argv)
+{
 	CheckError(
 		SDL_Init(SDL_INIT_AUDIO) == 0,
 		"Failed to initialize SDL: %s\n", SDL_GetError()
