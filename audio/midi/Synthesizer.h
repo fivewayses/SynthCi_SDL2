@@ -1,13 +1,14 @@
 #pragma once
 
-#include "Note.h"
-#include "waveforms.h"
-#include <SDL2/SDL_error.h>
 #include <cstddef>
 #include <cstdint>
 #include <climits>
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_audio.h>
+#include <SDL2/SDL_error.h>
+#include "Note.h"
+#include "waveforms.h"
+#include "../../error/error.h"
 
 #define MAX_VOICES 256
 #define SAMPLE_RATE 24000
@@ -46,10 +47,7 @@ static void AudioCallback(void *userdata, uint8_t *stream, int len) {
 class Synthesizer {
 	
 public:
-	Synthesizer()
-	{
-		Open();
-	}
+	Synthesizer() {}
 	
 	~Synthesizer()
 	{
@@ -61,12 +59,17 @@ public:
 		SDL_PauseAudioDevice(device, 0);
 	}
 	
-	void Stop() {
+	void Stop()
+	{
 		SDL_PauseAudioDevice(device, 1);
 	}
 	
-	bool Open() {
-		if (is_open) return false;
+	bool Open()
+	{
+		if (is_open) {
+			PushError({ "Audio device is already open" });
+			return false;
+		}
 		
 		SDL_AudioSpec spec {
 			.freq = SAMPLE_RATE,
@@ -78,12 +81,17 @@ public:
 		
 		device = SDL_OpenAudioDevice(NULL, 0, &spec, NULL, 0);
 		is_open = device > 0;
+		if (!is_open) RedirectSDLError();
 		
 		return is_open;
 	}
 	
-	bool Close() {
-		if (!is_open) return false;
+	bool Close()
+	{
+		if (!is_open) {
+			PushError({ "Audio device is already closed" });
+			return false;
+		}
 		
 		SDL_PauseAudioDevice(device, 1);
 		SDL_CloseAudioDevice(device);
@@ -94,11 +102,13 @@ public:
 		return true;
 	}
 	
-	inline bool IsOpen() const {
+	inline bool IsOpen() const
+	{
 		return is_open;
 	}
 	
-	uint32_t AddVoice(float freq) {
+	uint32_t AddVoice(float freq)
+	{
 		// Find free voice slot
 		for (int i = 0; i < MAX_VOICES; ++i) {
 			voice_t &v = voices[i];
@@ -114,26 +124,36 @@ public:
 		return 0;
 	}
 	
-	uint32_t AddVoice(uint8_t midi_note) {
+	uint32_t AddVoice(uint8_t midi_note)
+	{
 		return AddVoice(Note(midi_note));
 	}
 	
-	uint32_t AddVoice(note_e type, int32_t octave = 4) {
+	uint32_t AddVoice(note_e type, int32_t octave = 4)
+	{
 		return AddVoice(Note(type, octave));
 	}
 	
-	bool RemoveVoice(uint32_t index) {
-		if (index <= 0 || index > MAX_VOICES) return false;
+	bool RemoveVoice(uint32_t index)
+	{
+		if (index <= 0 || index > MAX_VOICES) {
+			PushError({ "Voice index (%d) out of range of 1 - %d", index, MAX_VOICES });
+			return false;
+		}
 		
 		voice_t &v = voices[index-1];
-		if (!v.is_active) return false;
+		if (!v.is_active) {
+			PushError({ "Voice #%d is not active", index });
+			return false;
+		}
 		
 		v.is_active = false;
 		
 		return true;
 	}
 	
-	uint8_t *TestAudio(uint32_t sample_size = 1024) {
+	uint8_t *TestAudio(uint32_t sample_size = 1024)
+	{
 		uint8_t *sample = new uint8_t[sample_size];
 		AudioCallback(NULL, sample, sample_size);
 		

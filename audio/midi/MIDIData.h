@@ -8,26 +8,12 @@
 #include "midi_parser.h"
 #include "Synthesizer.h"
 
-struct synth_event_t {
-	
-};
-
 class MIDIData {
 	
 public:
 	MIDIData(const uint8_t *data, uint32_t size)
 	{
 		valid = ParseMIDI(data, size, midi);
-		
-		/*
-		if (valid) {
-			uint32_t num_events = 0;
-			for (const midi_track_t &t : midi.tracks) {
-				num_events += (uint32_t)t.events.size();
-			}
-			
-			events = new synth_event_t[num_events];
-		}*/
 	}
 	
 	bool Play(Synthesizer &synth)
@@ -87,6 +73,5 @@ public:
 
 private:
 	bool valid = false;
-	//synth_event_t *events;
 	midi_data_t midi;
 };
