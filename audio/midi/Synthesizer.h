@@ -67,7 +67,7 @@ public:
 	bool Open()
 	{
 		if (is_open) {
-			PushError({ "Audio device is already open" });
+			PushError("Audio device is already open");
 			return false;
 		}
 		
@@ -89,7 +89,7 @@ public:
 	bool Close()
 	{
 		if (!is_open) {
-			PushError({ "Audio device is already closed" });
+			PushError("Audio device is already closed");
 			return false;
 		}
 		
@@ -137,13 +137,13 @@ public:
 	bool RemoveVoice(uint32_t index)
 	{
 		if (index <= 0 || index > MAX_VOICES) {
-			PushError({ "Voice index (%d) out of range of 1 - %d", index, MAX_VOICES });
+			PushError("Voice index (%d) out of range of 1 - %d", index, MAX_VOICES);
 			return false;
 		}
 		
 		voice_t &v = voices[index-1];
 		if (!v.is_active) {
-			PushError({ "Voice #%d is not active", index });
+			PushError("Voice #%d is not active", index);
 			return false;
 		}
 		

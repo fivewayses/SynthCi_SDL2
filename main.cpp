@@ -7,7 +7,7 @@
 #include "audio/midi/Synthesizer.h"
 #include "audio/midi/MIDIData.h"
 #include "error/error.h"
-#include "example/all_instruments_test.h"
+#include "example/note_c.h"
 
 #define CheckError(status, ...) if (!(status)) { \
 	SDL_Log(__VA_ARGS__); \
@@ -36,7 +36,7 @@ int main(int argc, char **argv)
 		"Failed to initialize SDL: %s\n", SDL_GetError()
 	);
 	
-	MIDIData midi(all_instruments_test, all_instruments_test_len);
+	MIDIData midi(note_c, note_c_len);
 	CheckError(
 		midi.IsValid(),
 		"MIDI parsing failed: %s", GetError().c_str()
@@ -49,14 +49,15 @@ int main(int argc, char **argv)
 	
 	synth.Play();
 	
+	SDL_Log("Playing concert A at 440Hz...\n");
 	synth.AddVoice(note_e::A, 5);
 	SDL_Delay(1000);
 	
 	synth.RemoveVoice(1);
 	SDL_Delay(1000);
 	
-	// TODO: Fix MIDI player
-	//midi.Play(synth);
+	SDL_Log("Playing MIDI...\n");
+	midi.Play(synth);
 	
 	synth.Close();
 	
