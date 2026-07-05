@@ -5,7 +5,6 @@
 #include <cstring>
 #include <utility>
 #include <vector>
-#include <SDL2/SDL.h>
 #include "../../error/error.h"
 #include "../../extra/big_endian.h"
 #include "../../extra/vlq.h"
@@ -36,11 +35,11 @@ struct midi_data_t {
 static bool ParseMIDI(const uint8_t *raw_midi, uint32_t size, midi_data_t &out)
 {
 	if (!raw_midi) {
-		PushError({ "MIDI data is NULL" });
+		PushError("MIDI data is NULL");
 		return false;
 	}
 	if (size == 0) {
-		PushError({ "MIDI size is 0" });
+		PushError("MIDI size is 0");
 		return false;
 	}
 	
@@ -49,20 +48,22 @@ static bool ParseMIDI(const uint8_t *raw_midi, uint32_t size, midi_data_t &out)
 	
 	/* MIDI Header */
 	if (size < required_size) {
-		PushError({ "MIDI not big enough for header" });
+		PushError("MIDI not big enough for header");
 		return false;
 	}
 	if (memcmp(raw_midi, MIDI_MTHD, 4) != 0) {
-		PushError({ "MIDI header does not start with MThd" });
+		PushError("MIDI header does not start with MThd");
 		return false;
 	}
 	
 	// TODO: Add MIDI format checking
+	uint16_t midi_format = ReadBigEndian<uint16_t>(&raw_midi[8]);
+	uint16_t num_tracks = ReadBigEndian<uint16_t>(&raw_midi[10]);
+	int16_t div = ReadBigEndian<int16_t>(&raw_midi[12]);
 	
-	uint32_t num_tracks = ReadBigEndian<uint16_t>(&raw_midi[6]);
-	int16_t div = ReadBigEndian<int16_t>(&raw_midi[8]);
-	double ms_per_tick = 500000.0 / div;
-	
+	int32_t ms_per_beat = 500;
+	double ms_per_tick = (double)ms_per_beat / (double)div;
+
 	offset += MIDI_HEADER_CHUNK_SIZE;
 	
 	std::vector<midi_track_t> tracks {};
@@ -74,7 +75,7 @@ static bool ParseMIDI(const uint8_t *raw_midi, uint32_t size, midi_data_t &out)
 	
 		if (size < required_size) break;
 		if (memcmp(&raw_midi[offset], MIDI_MTRK, 4) != 0) {
-			PushError({ "MIDI track #%d does not start with MTrk", i });
+			PushError("MIDI track #%d does not start with MTrk", i);
 			return false;
 		}
 	
@@ -83,7 +84,7 @@ static bool ParseMIDI(const uint8_t *raw_midi, uint32_t size, midi_data_t &out)
 		required_size += track_size;
 	
 		if (size < required_size) {
-			PushError({ "MIDI is not big enough (%d < %d, Track=%d)", size, required_size, i });
+			PushError("MIDI is not big enough (%d < %d, Track=%d)", size, required_size, i);
 			return false;
 		}
 		
@@ -97,6 +98,7 @@ static bool ParseMIDI(const uint8_t *raw_midi, uint32_t size, midi_data_t &out)
 		/* MIDI Events */
 		while (offset < track_end) {
 			uint32_t dt = ReadVLQ<uint32_t>(raw_midi, offset);
+			
 			abs_time += dt;
 			
 			uint8_t status = raw_midi[offset];
@@ -150,9 +152,9 @@ static bool ParseMIDI(const uint8_t *raw_midi, uint32_t size, midi_data_t &out)
 						events.push_back({
 							abs_time_ms,
 							dt,
-							event_type,
-							data1, // Note
-							data2  // Velocity
+							status, // Event type with channel
+							data1,  // Note
+							data2   // Velocity
 						});
 					}
 				}
