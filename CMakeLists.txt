@@ -8,6 +8,8 @@ add_executable(main
 
 find_package(SDL2 REQUIRED)
 
+target_include_directories(main PRIVATE
+	${CMAKE_CURRENT_SOURCE_DIR}
+)
+
 target_link_libraries(main SDL2::SDL2)
-
-
