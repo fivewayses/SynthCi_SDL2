@@ -10,3 +10,5 @@ __MACOSX
 *.lib
 *.so
 *.o
+
+testing.bin
