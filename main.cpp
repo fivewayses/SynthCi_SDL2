@@ -18,7 +18,7 @@ static Synthesizer synth;
 
 int Test()
 {
-	const uint32_t size = 1024;
+	const uint32_t size = 63356;
 	const char *test = reinterpret_cast<char *>(synth.TestAudio(size));
 	
 	std::fstream stream("testing.bin", std::ios::out | std::ios::binary);
@@ -29,8 +29,23 @@ int Test()
 	return 0;
 }
 
+bool CheckArg(const char* str, int argc, char **argv)
+{
+	if (!str || argc <= 0 || !argv) return false;
+	
+	for (int i = 0; i < argc; ++i) {
+		if (strcmp(str, argv[i]) == 0) return true;
+	}
+	
+	return false;
+}
+
 int main(int argc, char **argv)
 {
+	const bool do_midi_test = CheckArg("--testmidi", argc, argv);
+	const bool do_audio_sample_test = CheckArg("--testaudio", argc, argv);
+	const bool do_time_logging = CheckArg("--logtime", argc, argv);
+	
 	CheckError(
 		SDL_Init(SDL_INIT_AUDIO) == 0,
 		"Failed to initialize SDL: %s\n", SDL_GetError()
@@ -51,13 +66,28 @@ int main(int argc, char **argv)
 	
 	SDL_Log("Playing concert A at 440Hz...\n");
 	synth.AddVoice(note_e::A, 5);
-	SDL_Delay(1000);
+	
+	if (do_audio_sample_test) {
+		SDL_Log("Testing audio sample...\n");
+		Test();
+	}
+	
+	if (do_time_logging) {
+		for (int i = 1; i <= 20; ++i) {
+			SDL_Delay(100);
+			SDL_Log("%dms\n", i * 100);
+		}
+	} else {
+		SDL_Delay(2000);
+	}
 	
 	synth.RemoveVoice(1);
 	SDL_Delay(1000);
 	
-	SDL_Log("Playing MIDI...\n");
-	midi.Play(synth);
+	if (do_midi_test) {
+		SDL_Log("Playing MIDI...\n");
+		midi.Play(synth);
+	}
 	
 	synth.Close();
 	
