@@ -1,62 +1,70 @@
 #pragma once
 
-#include <array>
 #include <cstdint>
-#include "../../extra/compile_time_math.h"
+#include "extra/compile_time_math.h"
 
-constexpr std::array<int8_t, 65536> GenerateSquareSample()
+inline constexpr int WAVEFORM_SAMPLE_SIZE = 65536;
+inline constexpr int WAVEFORM_SAMPLE_HALF_SIZE = WAVEFORM_SAMPLE_SIZE / 2;
+inline constexpr int WAVEFORM_SAMPLE_QUAD_SIZE = WAVEFORM_SAMPLE_HALF_SIZE / 2;
+inline constexpr int WAVEFORM_SAMPLE_3_QUAD_SIZE = 3 * WAVEFORM_SAMPLE_QUAD_SIZE;
+
+struct waveform_sample_t {
+	int8_t data[WAVEFORM_SAMPLE_SIZE];
+};
+
+constexpr waveform_sample_t GenerateSquareSample()
 {
-	std::array<int8_t, 65536> sample {};
+	waveform_sample_t sample {};
 	
-	for (int32_t i = 0; i < 32768; ++i) {
-		sample[i] = 112;
+	for (int32_t i = 0; i < WAVEFORM_SAMPLE_HALF_SIZE; ++i) {
+		sample.data[i] = 112;
 	}
-	for (int32_t i = 32768; i < 65536; ++i) {
-		sample[i] = -112;
+	for (int32_t i = WAVEFORM_SAMPLE_HALF_SIZE; i < WAVEFORM_SAMPLE_SIZE; ++i) {
+		sample.data[i] = -112;
 	}
 	
 	return sample;
 }
 
-constexpr std::array<int8_t, 65536> GenerateSawtoothSample()
+constexpr waveform_sample_t GenerateSawtoothSample()
 {
-	std::array<int8_t, 65536> sample {};
+	waveform_sample_t sample {};
 	
-	for (int32_t i = 0; i < 65536; ++i) {
-		sample[i] = (i - 32768) / 288;
+	for (int32_t i = 0; i < WAVEFORM_SAMPLE_SIZE; ++i) {
+		sample.data[i] = (i - WAVEFORM_SAMPLE_HALF_SIZE) / 288;
 	}
 	
 	return sample;
 }
 
-constexpr std::array<int8_t, 65536> GenerateTriangleSample()
+constexpr waveform_sample_t GenerateTriangleSample()
 {
-	std::array<int8_t, 65536> sample {};
+	waveform_sample_t sample {};
 	
-	for (int32_t i = 0; i < 32768; ++i) {
-		sample[i] = (i - 16384) / 144;
+	for (int32_t i = 0; i < WAVEFORM_SAMPLE_HALF_SIZE; ++i) {
+		sample.data[i] = (i - WAVEFORM_SAMPLE_QUAD_SIZE) / 144;
 	}
-	for (int32_t i = 32768; i < 65536; ++i) {
-		sample[i] = (49152 - i) / 144;
+	for (int32_t i = WAVEFORM_SAMPLE_HALF_SIZE; i < WAVEFORM_SAMPLE_SIZE; ++i) {
+		sample.data[i] = (WAVEFORM_SAMPLE_3_QUAD_SIZE - i) / 144;
 	}
 	
 	return sample;
 }
 
-constexpr std::array<int8_t, 65536> GenerateSineSample()
+constexpr waveform_sample_t GenerateSineSample()
 {
-	std::array<int8_t, 65536> sample {};
+	waveform_sample_t sample {};
 	
-	for (int32_t i = 0; i < 32768; ++i) {
-		int8_t res = 112.0f * CompileTimeSin(i * PI / 32768.0f);
-		sample[i] = res;
-		sample[i+32768] = -res;
+	for (int32_t i = 0; i < WAVEFORM_SAMPLE_HALF_SIZE; ++i) {
+		int8_t res = 112.0f * CompileTimeSin(i * PI / (float)WAVEFORM_SAMPLE_HALF_SIZE);
+		sample.data[i] = res;
+		sample.data[i + WAVEFORM_SAMPLE_HALF_SIZE] = -res;
 	}
 	
 	return sample;
 }
 
-inline constexpr std::array<int8_t, 65536> SQUARE_SAMPLE   = GenerateSquareSample();
-inline constexpr std::array<int8_t, 65536> TRIANGLE_SAMPLE = GenerateTriangleSample();
-inline constexpr std::array<int8_t, 65536> SAWTOOTH_SAMPLE = GenerateSawtoothSample();
-inline constexpr std::array<int8_t, 65536> SINE_SAMPLE     = GenerateSineSample();
+inline constexpr waveform_sample_t SQUARE_SAMPLE   = GenerateSquareSample();
+inline constexpr waveform_sample_t TRIANGLE_SAMPLE = GenerateTriangleSample();
+inline constexpr waveform_sample_t SAWTOOTH_SAMPLE = GenerateSawtoothSample();
+inline constexpr waveform_sample_t SINE_SAMPLE     = GenerateSineSample();
