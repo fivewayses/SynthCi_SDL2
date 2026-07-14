@@ -67,7 +67,7 @@ public:
 				
 				case 0x90:
 					if (!notes[e.data1])
-						notes[e.data1] = synth.AddVoice(MIDI_PITCH_TABLE[e.data1]);
+						notes[e.data1] = synth.AddVoice(MIDI_PITCH_TABLE.data[e.data1]);
 					
 					break;
 					

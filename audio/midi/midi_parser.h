@@ -5,9 +5,9 @@
 #include <cstring>
 #include <utility>
 #include <vector>
-#include "../../error/error.h"
-#include "../../extra/big_endian.h"
-#include "../../extra/vlq.h"
+#include "error/error.h"
+#include "extra/big_endian.h"
+#include "extra/vlq.h"
 
 #define MIDI_HEADER_CHUNK_SIZE 14
 #define MIDI_TRACK_CHUNK_SIZE 8
