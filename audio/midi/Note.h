@@ -1,6 +1,6 @@
 #pragma once
 
-#include "pitch_table.h"
+#include "lookup_tables.h"
 #include <cmath>
 #include <cstdint>
 

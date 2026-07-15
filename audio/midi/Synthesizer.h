@@ -6,7 +6,9 @@
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_audio.h>
 #include <SDL2/SDL_error.h>
+#include <cstdio>
 #include "Note.h"
+#include "lookup_tables.h"
 #include "waveforms.h"
 #include "error/error.h"
 
@@ -16,14 +18,14 @@
 #define ITERS_PER_ENVELOPE_CALC 16
 
 struct sound_envelope_t {
-	uint32_t attack = 500;
-	uint32_t decay = 1000;
-	uint32_t release = 300;
-	uint8_t sustain = 10;
+	uint32_t attack = 50;
+	uint32_t decay = 100;
+	uint32_t release = 1000;
+	uint8_t sustain = 192;
 };
 
 struct voice_t {
-	uint64_t time_lticks = 0;
+	int64_t time_lticks = 0;
 	uint32_t phase_inc = 0;
 	uint16_t phase = 0;
 	uint8_t envelope = 0;
@@ -56,24 +58,32 @@ static void AudioCallback(void *userdata, uint8_t *stream, int len) {
 			sound_envelope_t env = global_envelope;
 			
 			for (int j = 0; j < MAX_VOICES; ++j) {
-				voice_t &v = voices[j];
+				// Copy the voice to the stack to prevent
+				// race condition.
+				voice_t v = voices[j];
 
-				if (!v.is_active) continue;
+				// If the voice is not active, check first
+				// whether time is negative, representing
+				// the release envelope.
+				if (!v.is_active && v.time_lticks >= 0) continue;
 				
 				int32_t t = env.attack;
 				int64_t time_ms = v.time_lticks / LTICKS_PER_MS;
 				
-				if (time_ms < t) {
+				if (v.time_lticks < 0) {
+					// Releasing: sound fades out
+					voices[j].envelope = env.sustain * -time_ms / env.release;
+				} else if (time_ms < t) {
 					// Attacking: sound increases sharply
-					v.envelope = 256 * time_ms / env.attack;
+					voices[j].envelope = 256 * time_ms / env.attack;
 				} else {
 					t += env.decay;
-					if (time_ms < t && false) {
+					if (time_ms < t) {
 						// Decaying: sound levels out
-						v.envelope = env.sustain + (t - time_ms) * (256 - env.sustain) / env.decay;
+						voices[j].envelope = env.sustain + (t - time_ms) * (256 - env.sustain) / env.decay;
 					} else {
 						// Sustaining: sound stays the same
-						v.envelope = env.sustain;
+						voices[j].envelope = env.sustain;
 					}
 				}
 			}
@@ -82,11 +92,17 @@ static void AudioCallback(void *userdata, uint8_t *stream, int len) {
 		for (int j = 0; j < MAX_VOICES; ++j) {
 			voice_t &v = voices[j];
 			
-			if (!v.is_active) continue;
+			// If the voice is not active, check first
+			// whether time is negative, representing
+			// the release envelope.
+			if (!v.is_active && v.time_lticks >= 0) continue;
 			
 			v.time_lticks += SAMPLE_TIME_INC;
 			v.phase += v.phase_inc;
-			audio_sample += (int16_t)((int32_t)waveform_sample_table[v.phase] * v.envelope / 256);
+			
+			uint8_t vel = VELOCITY_TABLE.data[v.envelope];
+			audio_sample += (int16_t)((int32_t)waveform_sample_table[v.phase] * vel / 256);
+			
 			++num_active_voices;
 		}
 		
@@ -187,7 +203,22 @@ public:
 	
 	uint32_t AddVoice(float freq)
 	{
-		// Find free voice slot
+		// Find free voice slot.
+		for (int i = 0; i < MAX_VOICES; ++i) {
+			voice_t &v = voices[i];
+			if (v.is_active || v.time_lticks < 0) continue;
+			
+			v.time_lticks = 0;
+			v.phase_inc = (uint32_t)(freq * 65536.0f / (float)SAMPLE_RATE);
+			v.phase = 0;
+			v.envelope = 0;
+			v.is_active = true;
+		
+			return i + 1;
+		}
+		
+		// Try to find releasing voice slot
+		// if no fully free slot is avalible.
 		for (int i = 0; i < MAX_VOICES; ++i) {
 			voice_t &v = voices[i];
 			if (v.is_active) continue;
@@ -195,6 +226,7 @@ public:
 			v.time_lticks = 0;
 			v.phase_inc = (uint32_t)(freq * 65536.0f / (float)SAMPLE_RATE);
 			v.phase = 0;
+			v.envelope = 0;
 			v.is_active = true;
 		
 			return i + 1;
@@ -226,6 +258,7 @@ public:
 			return false;
 		}
 		
+		v.time_lticks = -(int64_t)global_envelope.release * LTICKS_PER_MS;
 		v.is_active = false;
 		
 		return true;
