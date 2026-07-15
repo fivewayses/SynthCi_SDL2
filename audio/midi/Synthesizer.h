@@ -20,7 +20,7 @@
 struct sound_envelope_t {
 	uint32_t attack = 50;
 	uint32_t decay = 100;
-	uint32_t release = 1000;
+	uint32_t release = 300;
 	uint8_t sustain = 192;
 };
 
@@ -101,7 +101,8 @@ static void AudioCallback(void *userdata, uint8_t *stream, int len) {
 			v.phase += v.phase_inc;
 			
 			uint8_t vel = VELOCITY_TABLE.data[v.envelope];
-			audio_sample += (int16_t)((int32_t)waveform_sample_table[v.phase] * vel / 256);
+			int32_t wsample = waveform_sample_table[v.phase / WAVEFORM_SAMPLE_DIV];
+			audio_sample += (int16_t)(wsample * vel / 256);
 			
 			++num_active_voices;
 		}
@@ -277,3 +278,4 @@ private:
 	
 	bool is_open = false;
 };
+
