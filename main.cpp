@@ -29,7 +29,7 @@
 #include "audio/midi/Synthesizer.h"
 #include "audio/midi/MIDIData.h"
 #include "error/error.h"
-#include "example/note_c.h"
+#include "example/fallen_down.h"
 
 #define CheckError(status, ...) if (!(status)) { \
 	SDL_Log(__VA_ARGS__); \
@@ -73,7 +73,7 @@ int main(int argc, char **argv)
 		"Failed to initialize SDL: %s\n", SDL_GetError()
 	);
 	
-	MIDIData midi(note_c, note_c_len);
+	MIDIData midi(fallen_down, fallen_down_len);
 	CheckError(
 		midi.IsValid(),
 		"MIDI parsing failed: %s", GetError().c_str()

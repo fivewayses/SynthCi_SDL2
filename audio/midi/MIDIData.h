@@ -41,7 +41,7 @@ public:
 		valid = ParseMIDI(data, size, midi);
 		
 		// Un-comment this line to inspect MIDI notes.
-		//DebugNotes();
+		DebugNotes();
 	}
 	
 	bool Play(Synthesizer &synth)
@@ -60,7 +60,7 @@ public:
 		uint32_t current_t = 0;
 		uint32_t step = 0;
 		
-		static uint32_t notes[256];
+		static uint32_t notes[16][256];
 		memset(notes, 0, sizeof(notes));
 		
 		while (true) {
@@ -83,23 +83,32 @@ public:
 				++step;
 				if (step >= midi.tracks[0].events.size()) return true;
 				
-				uint8_t channel = e.type & 0x0f;
+				uint8_t channel = e.type & 0x0F;
 				
-				switch (e.type & 0xf0) {
+				switch (e.type & 0xF0) {
 				
 				case 0x90:
-					if (!notes[e.data1])
-						notes[e.data1] = synth.AddVoice(MIDI_PITCH_TABLE.data[e.data1]);
+					// Stop the voice if playing.
+					if (notes[e.data1]) {
+						synth.RemoveVoice(notes[channel][e.data1]);
+					}
+					
+					notes[channel][e.data1] = synth.AddVoice(MIDI_PITCH_TABLE.data[e.data1]);
+					SDL_Log("Note On\n");
 					
 					break;
 					
 				case 0x80:
 					if (notes[e.data1]) {
-						synth.RemoveVoice(notes[e.data1]);
-						notes[e.data1] = 0;
+						synth.RemoveVoice(notes[channel][e.data1]);
+						notes[channel][e.data1] = 0;
+						SDL_Log("Note Off\n");
 					}
 				
 					break;
+					
+				default:
+					SDL_Log("Unknown: %x\n", e.type);
 				}
 				
 				++current_t;
@@ -123,7 +132,7 @@ public:
 		
 		for (const midi_event_t &e : midi.tracks[0].events) {
 			SDL_Log(
-				"abs=%d\ndt=%d\ntype=%x\ndata1=%d\ndata2=%d\n",
+				"abs=%d dt=%d type=%x data1=%d data2=%d\n",
 				e.abs_time,
 				e.dt,
 				e.type,

@@ -152,6 +152,7 @@ static bool ParseMIDI(const uint8_t *raw_midi, uint32_t size, midi_data_t &out)
 			} else {
 				// MIDI CHANNEL EVENT
 				uint8_t event_type = status & 0xF0; // Strip the channel (lower 4 bits)
+				uint8_t channel = status & 0x0F;
 				
 				// Extract Data Bytes depending on the event type
 				if (event_type == 0xC0 || event_type == 0xD0) {
@@ -167,6 +168,8 @@ static bool ParseMIDI(const uint8_t *raw_midi, uint32_t size, midi_data_t &out)
 						// In MIDI, a Note On (0x90) with 0 velocity is actually a Note Off
 						if (event_type == 0x90 && data2 == 0) {
 							event_type = 0x80;
+							// Make sure our status is updated.
+							status = event_type | channel;
 						}
 						
 						uint32_t abs_time_ms = (double)abs_time * ms_per_tick;

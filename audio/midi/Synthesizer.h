@@ -68,6 +68,76 @@ static uint16_t envelope_phase = 0;
 
 /* The Audio Callback Which Generates Sound */
 static void AudioCallback(void *userdata, uint8_t *stream, int len) {
+    for (int i = 0; i < len; ++i) {
+        int32_t audio_sample = 0; // Use int32_t to accumulate without overflowing early
+        int32_t num_active_voices = 0;
+        
+        // Bitwise AND is vastly faster than modulo for powers of 2.
+        // 15 in binary is 00001111. This triggers every 16 iterations.
+        if ((envelope_phase++ & 15) == 0) {
+            sound_envelope_t env = global_envelope;
+            
+            for (int j = 0; j < MAX_VOICES; ++j) {
+                voice_t &v = voices[j]; // Just use the reference, copying doesn't make it thread-safe
+
+                if (!v.is_active && v.time_lticks >= 0) continue;
+                
+                int32_t t = env.attack;
+                
+                // Pre-calculate this division so we only do it once per envelope update
+                int64_t time_ms = v.time_lticks / LTICKS_PER_MS; 
+                
+                if (v.time_lticks < 0) {
+                    // Releasing
+                    v.envelope = (env.sustain * -time_ms) / env.release;
+                } else if (time_ms < t) {
+                    // Attacking: Bitshift instead of * 256
+                    v.envelope = (time_ms << 8) / env.attack;
+                } else {
+                    t += env.decay;
+                    if (time_ms < t) {
+                        // Decaying
+                        v.envelope = env.sustain + ((t - time_ms) * (256 - env.sustain)) / env.decay;
+                    } else {
+                        // Sustaining
+                        v.envelope = env.sustain;
+                    }
+                }
+            }
+        }
+        
+        for (int j = 0; j < MAX_VOICES; ++j) {
+            voice_t &v = voices[j];
+            
+            if (!v.is_active && v.time_lticks >= 0) continue;
+            
+            v.time_lticks += SAMPLE_TIME_INC;
+            v.phase += v.phase_inc;
+            
+            uint8_t vel = VELOCITY_TABLE.data[v.envelope];
+            
+            // Assuming WAVEFORM_SAMPLE_DIV is a power of 2 (like 256), use a bitshift here too
+            int32_t wsample = waveform_sample_table[v.phase / WAVEFORM_SAMPLE_DIV];
+            
+            // Bitshift right by 8 is identical to dividing by 256, but much faster
+            audio_sample += (wsample * vel) >> 8; 
+            
+            ++num_active_voices;
+        }
+        
+        // Master volume attenuation
+        audio_sample /= 8;
+        
+        // Clamp to valid 8-bit audio range (-127 to 127)
+        if (audio_sample > 127) audio_sample = 127;
+        else if (audio_sample < -127) audio_sample = -127;
+        
+        stream[i] = (uint8_t)(audio_sample + 128);
+    }
+}
+
+/*
+static void AudioCallback(void *userdata, uint8_t *stream, int len) {
 	for (int i = 0; i < len; ++i) {
 		int16_t audio_sample = 0;
 		int32_t num_active_voices = 0;
@@ -127,9 +197,15 @@ static void AudioCallback(void *userdata, uint8_t *stream, int len) {
 			++num_active_voices;
 		}
 		
-		stream[i] = num_active_voices ? (uint8_t)(audio_sample / num_active_voices + 128) : 128;
+		audio_sample /= 8;
+		
+		// Clamp the audio sample.
+		if (audio_sample >  127) audio_sample =  127;
+		if (audio_sample < -127) audio_sample = -127;
+		
+		stream[i] = (uint8_t)(audio_sample + 128);
 	}
-}
+}*/
 
 class Synthesizer {
 	

@@ -61,5 +61,5 @@ constexpr velocity_table_t GenerateVelocityTable()
 	return table;
 }
 
-inline constexpr pitch_table_t MIDI_PITCH_TABLE = GeneratePitchTable();
+inline constexpr pitch_table_t MIDI_PITCH_TABLE  = GeneratePitchTable();
 inline constexpr velocity_table_t VELOCITY_TABLE = GenerateVelocityTable();
