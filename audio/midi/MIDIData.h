@@ -36,12 +36,13 @@ constexpr char INVALID_MIDI_DATA_ERR[] = "MIDI data is not valid";
 class MIDIData {
 	
 public:
-	MIDIData(const uint8_t *data, uint32_t size)
+	MIDIData(const uint8_t *data, uint32_t size, bool debug_notes = false)
 	{
 		valid = ParseMIDI(data, size, midi);
 		
-		// Un-comment this line to inspect MIDI notes.
-		DebugNotes();
+		if (debug_notes) {
+			DebugNotes();
+		}
 	}
 	
 	bool Play(Synthesizer &synth)

@@ -27,6 +27,7 @@
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_audio.h>
 #include <SDL2/SDL_error.h>
+#include <cstring>
 #include "Note.h"
 #include "lookup_tables.h"
 #include "waveforms.h"
@@ -52,165 +53,22 @@ struct voice_t {
 	bool is_active = false;
 };
 
-typedef enum {
+enum class waveform_e {
 	SQUARE = 1,
 	SAWTOOTH = 2,
 	TRIANGLE = 3,
 	SINE = 4
-} waveform_e;
+};
 
-const uint32_t SAMPLE_TIME_INC = 1000 * LTICKS_PER_MS / SAMPLE_RATE;
-
-const int8_t *waveform_sample_table = SQUARE_SAMPLE.data;
-static sound_envelope_t global_envelope;
-static voice_t voices[MAX_VOICES];
-static uint16_t envelope_phase = 0;
-
-/* The Audio Callback Which Generates Sound */
-static void AudioCallback(void *userdata, uint8_t *stream, int len) {
-    for (int i = 0; i < len; ++i) {
-        int32_t audio_sample = 0; // Use int32_t to accumulate without overflowing early
-        int32_t num_active_voices = 0;
-        
-        // Bitwise AND is vastly faster than modulo for powers of 2.
-        // 15 in binary is 00001111. This triggers every 16 iterations.
-        if ((envelope_phase++ & 15) == 0) {
-            sound_envelope_t env = global_envelope;
-            
-            for (int j = 0; j < MAX_VOICES; ++j) {
-                voice_t &v = voices[j]; // Just use the reference, copying doesn't make it thread-safe
-
-                if (!v.is_active && v.time_lticks >= 0) continue;
-                
-                int32_t t = env.attack;
-                
-                // Pre-calculate this division so we only do it once per envelope update
-                int64_t time_ms = v.time_lticks / LTICKS_PER_MS; 
-                
-                if (v.time_lticks < 0) {
-                    // Releasing
-                    v.envelope = (env.sustain * -time_ms) / env.release;
-                } else if (time_ms < t) {
-                    // Attacking: Bitshift instead of * 256
-                    v.envelope = (time_ms << 8) / env.attack;
-                } else {
-                    t += env.decay;
-                    if (time_ms < t) {
-                        // Decaying
-                        v.envelope = env.sustain + ((t - time_ms) * (256 - env.sustain)) / env.decay;
-                    } else {
-                        // Sustaining
-                        v.envelope = env.sustain;
-                    }
-                }
-            }
-        }
-        
-        for (int j = 0; j < MAX_VOICES; ++j) {
-            voice_t &v = voices[j];
-            
-            if (!v.is_active && v.time_lticks >= 0) continue;
-            
-            v.time_lticks += SAMPLE_TIME_INC;
-            v.phase += v.phase_inc;
-            
-            uint8_t vel = VELOCITY_TABLE.data[v.envelope];
-            
-            // Assuming WAVEFORM_SAMPLE_DIV is a power of 2 (like 256), use a bitshift here too
-            int32_t wsample = waveform_sample_table[v.phase / WAVEFORM_SAMPLE_DIV];
-            
-            // Bitshift right by 8 is identical to dividing by 256, but much faster
-            audio_sample += (wsample * vel) >> 8; 
-            
-            ++num_active_voices;
-        }
-        
-        // Master volume attenuation
-        audio_sample /= 8;
-        
-        // Clamp to valid 8-bit audio range (-127 to 127)
-        if (audio_sample > 127) audio_sample = 127;
-        else if (audio_sample < -127) audio_sample = -127;
-        
-        stream[i] = (uint8_t)(audio_sample + 128);
-    }
-}
-
-/*
-static void AudioCallback(void *userdata, uint8_t *stream, int len) {
-	for (int i = 0; i < len; ++i) {
-		int16_t audio_sample = 0;
-		int32_t num_active_voices = 0;
-		
-		// The envelope calculation will run every
-		// ITERS_PER_ENVELOPE_CALC iterations.
-		if (envelope_phase++ % ITERS_PER_ENVELOPE_CALC == 0) {
-			sound_envelope_t env = global_envelope;
-			
-			for (int j = 0; j < MAX_VOICES; ++j) {
-				// Copy the voice to the stack to prevent
-				// race condition.
-				voice_t v = voices[j];
-
-				// If the voice is not active, check first
-				// whether time is negative, representing
-				// the release envelope.
-				if (!v.is_active && v.time_lticks >= 0) continue;
-				
-				int32_t t = env.attack;
-				int64_t time_ms = v.time_lticks / LTICKS_PER_MS;
-				
-				if (v.time_lticks < 0) {
-					// Releasing: sound fades out
-					voices[j].envelope = env.sustain * -time_ms / env.release;
-				} else if (time_ms < t) {
-					// Attacking: sound increases sharply
-					voices[j].envelope = 256 * time_ms / env.attack;
-				} else {
-					t += env.decay;
-					if (time_ms < t) {
-						// Decaying: sound levels out
-						voices[j].envelope = env.sustain + (t - time_ms) * (256 - env.sustain) / env.decay;
-					} else {
-						// Sustaining: sound stays the same
-						voices[j].envelope = env.sustain;
-					}
-				}
-			}
-		}
-		
-		for (int j = 0; j < MAX_VOICES; ++j) {
-			voice_t &v = voices[j];
-			
-			// If the voice is not active, check first
-			// whether time is negative, representing
-			// the release envelope.
-			if (!v.is_active && v.time_lticks >= 0) continue;
-			
-			v.time_lticks += SAMPLE_TIME_INC;
-			v.phase += v.phase_inc;
-			
-			uint8_t vel = VELOCITY_TABLE.data[v.envelope];
-			int32_t wsample = waveform_sample_table[v.phase / WAVEFORM_SAMPLE_DIV];
-			audio_sample += (int16_t)(wsample * vel / 256);
-			
-			++num_active_voices;
-		}
-		
-		audio_sample /= 8;
-		
-		// Clamp the audio sample.
-		if (audio_sample >  127) audio_sample =  127;
-		if (audio_sample < -127) audio_sample = -127;
-		
-		stream[i] = (uint8_t)(audio_sample + 128);
-	}
-}*/
+constexpr uint32_t SAMPLE_TIME_INC = 1000 * LTICKS_PER_MS / SAMPLE_RATE;
 
 class Synthesizer {
 	
 public:
-	Synthesizer() {}
+	Synthesizer() {
+		// Initialize AudioCallback's userdata.
+		audio_userdata.synth = this;
+	}
 	
 	~Synthesizer()
 	{
@@ -239,7 +97,8 @@ public:
 			.format = AUDIO_U8,
 			.channels = 1,
 			.samples = 512,
-			.callback = AudioCallback
+			.callback = AudioCallback,
+			.userdata = &audio_userdata
 		};
 		
 		device = SDL_OpenAudioDevice(NULL, 0, &spec, NULL, 0);
@@ -258,7 +117,7 @@ public:
 		
 		SDL_PauseAudioDevice(device, 1);
 		SDL_CloseAudioDevice(device);
-			
+		
 		device = 0;
 		is_open = false;
 		
@@ -364,13 +223,91 @@ public:
 	uint8_t *TestAudio(uint32_t sample_size = 1024)
 	{
 		uint8_t *sample = new uint8_t[sample_size];
-		AudioCallback(NULL, sample, sample_size);
+		AudioCallback(&audio_userdata, sample, sample_size);
 		
 		return sample;
 	}
 
 private:
+	struct userdata_t {
+		Synthesizer *synth;
+	};
+
 	SDL_AudioDeviceID device;
-	
+	userdata_t audio_userdata;
 	bool is_open = false;
+	
+	const int8_t *waveform_sample_table = SQUARE_SAMPLE.data;
+	sound_envelope_t global_envelope {};
+	voice_t voices[MAX_VOICES] {};
+	uint16_t envelope_phase = 0;
+	
+	/* The Audio Callback Which Generates Sound */
+	static void AudioCallback(void *userdata, uint8_t *stream, int len) {
+		if (!userdata) {
+			// Set the sample to make sure the sound
+			// doesn't glitch out.
+			memset(stream, 128, len);
+			return;
+		}
+		
+		Synthesizer *sn = ((userdata_t*)userdata)->synth;
+		if (!sn) {
+			// Set the sample to make sure the sound
+			// doesn't glitch out.
+			memset(stream, 128, len);
+			return;
+		}
+		
+		sound_envelope_t env = sn->global_envelope;
+		
+		for (int i = 0; i < len; ++i) {
+			int16_t audio_sample = 0;
+			int32_t num_active_voices = 0;
+				
+			for (int j = 0; j < MAX_VOICES; ++j) {
+				voice_t &v = sn->voices[j];
+	
+				// If the voice is not active, check first
+				// whether time is negative, representing
+				// the release envelope.
+				if (!v.is_active && v.time_lticks >= 0) continue;
+					
+				int32_t t = env.attack;
+				int64_t time_ms = v.time_lticks / LTICKS_PER_MS;
+					
+				if (v.time_lticks < 0) {
+					// Releasing: sound fades out
+					v.envelope = env.sustain * -time_ms / env.release;
+				} else if (time_ms < t) {
+					// Attacking: sound increases sharply
+					v.envelope = 256 * time_ms / env.attack;
+				} else {
+					t += env.decay;
+					if (time_ms < t) {
+						// Decaying: sound levels out
+						v.envelope = env.sustain + (t - time_ms) * (256 - env.sustain) / env.decay;
+					} else {
+						// Sustaining: sound stays the same
+						v.envelope = env.sustain;
+					}
+				}
+				
+				v.time_lticks += SAMPLE_TIME_INC;
+				v.phase += v.phase_inc;
+				
+				uint8_t vel = VELOCITY_TABLE.data[v.envelope];
+				int32_t wsample = sn->waveform_sample_table[v.phase / WAVEFORM_SAMPLE_DIV];
+				audio_sample += (int16_t)(wsample * vel / 256);
+			}
+			
+			audio_sample /= 8;
+			
+			// Clamp the audio sample.
+			if (audio_sample >  127) audio_sample = 127;
+			else if (audio_sample < -127) audio_sample = -127;
+			
+			stream[i] = (uint8_t)(audio_sample + 128);
+		}
+	}
 };
