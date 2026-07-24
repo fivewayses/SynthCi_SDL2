@@ -54,7 +54,7 @@ struct midi_data_t {
 	std::vector<midi_track_t> tracks;
 };
 
-static bool ParseMIDI(const uint8_t *raw_midi, uint32_t size, midi_data_t &out)
+inline bool ParseMIDI(const uint8_t *raw_midi, uint32_t size, midi_data_t &out)
 {
 	if (!raw_midi) {
 		PushError("MIDI data is NULL");

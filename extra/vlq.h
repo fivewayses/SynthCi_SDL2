@@ -25,7 +25,7 @@
 #include <cstdint>
 
 template <typename T>
-static T ReadVLQ(const uint8_t *data, uint32_t &offset)
+inline T ReadVLQ(const uint8_t *data, uint32_t &offset)
 {
 	T value = 0;
 	uint8_t byte;

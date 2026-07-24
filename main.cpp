@@ -67,13 +67,14 @@ int main(int argc, char **argv)
 	const bool do_midi_test = CheckArg("--testmidi", argc, argv);
 	const bool do_audio_sample_test = CheckArg("--testaudio", argc, argv);
 	const bool do_time_logging = CheckArg("--logtime", argc, argv);
+	const bool do_debug_notes = CheckArg("--debugnotes", argc, argv);
 	
 	CheckError(
 		SDL_Init(SDL_INIT_AUDIO) == 0,
 		"Failed to initialize SDL: %s\n", SDL_GetError()
 	);
 	
-	MIDIData midi(fallen_down, fallen_down_len);
+	MIDIData midi(fallen_down, fallen_down_len, do_debug_notes);
 	CheckError(
 		midi.IsValid(),
 		"MIDI parsing failed: %s", GetError().c_str()
