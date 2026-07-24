@@ -22,6 +22,7 @@
 
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 #include <cstdio>
 #include <string>
@@ -35,63 +36,90 @@ struct error_info_t {
 	bool valid = false;
 };
 
-static error_info_t error_stack[ERROR_STACK_SIZE];
+struct error_globals_t {
+	error_info_t err_stack[ERROR_STACK_SIZE];
+	uint32_t num_errors = 0;
+};
 
-static std::string GetError(uint32_t index = 0)
+inline error_globals_t *GetErrorGlobals() {
+	// This makes sure error_globals shares
+	// the same reference to all .cpp files.
+	static error_globals_t error_globals {};
+	return &error_globals;
+}
+
+inline std::string GetError(int32_t index = -1)
 {
-	if (index >= ERROR_STACK_SIZE) return "";
-	
-	error_info_t &err = error_stack[index];
+	error_globals_t *errg = GetErrorGlobals();
+	error_info_t *error_stack = errg->err_stack;
+	uint32_t num_errors = errg->num_errors;
+	uint32_t true_index = 0;
+
+	if (index > 0 && index <= num_errors) {
+		true_index = index - 1;
+	} else if (index < 0 && index >= -(int32_t)num_errors) {
+		true_index = num_errors + index;
+	} else {
+		return "";
+	}
+
+	error_info_t &err = error_stack[true_index];
 	if (!err.valid) return "";
-	
-	char err_buffer[256];
-	snprintf(
-		err_buffer, sizeof(err_buffer), err.msg,
+
+	// String size including NULL-terminator.
+	size_t required_size = 1 + snprintf(
+		NULL, 0, err.msg,
 		err.p1, err.p2, err.p3, err.p4
 	);
 	
+	std::string err_buffer(required_size, '\0');
+	sprintf(
+		err_buffer.data(), err.msg,
+		err.p1, err.p2, err.p3, err.p4
+	);
+
 	return err_buffer;
 }
 
-static void PushError(
+inline void PushError(
 	const char *msg,
 	int64_t p1 = 0, int64_t p2 = 0,
 	int64_t p3 = 0, int64_t p4 = 0
 )
 {
+	error_globals_t *errg = GetErrorGlobals();
+	error_info_t *error_stack = errg->err_stack;
 	error_info_t err = { msg, p1, p2, p3, p4, true };
 	
-	// Shift the error stack.
-	for (int i = ERROR_STACK_SIZE - 1; i > 0; --i) {
-		error_info_t prev = error_stack[i-1];
-		if (!prev.valid) return;
-		
-		error_stack[i] = prev;
+	if (errg->num_errors >= ERROR_STACK_SIZE) {
+		// Shift the error stack to get space.
+		for (int i = 0; i < ERROR_STACK_SIZE - 1; ++i) {
+			error_stack[i] = error_stack[i+1];
+		}
+	} else {
+		++errg->num_errors;
 	}
 	
-	error_stack[0] = err;
+	error_stack[errg->num_errors - 1] = err;
 }
 
-static void ClearError()
+inline void ClearError()
 {
-	error_info_t &err = error_stack[0];
-	int32_t i = 0;
-	
-	while (err.valid) {
-		err.valid = false;
-		err = error_stack[++i];
-	}
+	error_globals_t *errg = GetErrorGlobals();
+	// Due to how arenas work, we just need
+	// to set the size to 0.
+	errg->num_errors = 0;
 }
 
-static uint32_t GetNumErrors()
+inline uint32_t GetNumErrors()
 {
-	int32_t i = 0;
-	while (error_stack[i].valid) ++i;
-	
-	return i;
+	error_globals_t *errg = GetErrorGlobals();
+	return errg->num_errors;
 }
 
 inline void RedirectSDLError()
 {
 	PushError(SDL_GetError());
+}
+_GetError());
 }
