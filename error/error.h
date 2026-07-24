@@ -121,5 +121,3 @@ inline void RedirectSDLError()
 {
 	PushError(SDL_GetError());
 }
-_GetError());
-}
